@@ -93,7 +93,9 @@ def within_group_corr(x, y, groups) -> float:
     a relationship holds *within* states, not just between regions."""
     import pandas as pd
 
-    df = pd.DataFrame({"x": x, "y": y, "g": groups}).dropna()
+    df = pd.DataFrame({"x": np.asarray(x, float), "y": np.asarray(y, float), "g": np.asarray(groups)}).dropna()
+    if len(df) < 3:
+        return float("nan")
     dx = df["x"] - df.groupby("g")["x"].transform("mean")
     dy = df["y"] - df.groupby("g")["y"].transform("mean")
     return float(np.corrcoef(dx, dy)[0, 1])

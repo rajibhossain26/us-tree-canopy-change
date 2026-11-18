@@ -83,3 +83,20 @@ def test_within_group_corr_removes_group_offsets():
     g = ["a", "a", "b", "b"]
     assert np.corrcoef(x, y)[0, 1] > 0.9
     assert within_group_corr(x, y, g) == pytest.approx(-1.0)
+
+
+def test_parse_acs_summary_file():
+    from canopy.acs import parse_table
+
+    text = ("GEO_ID|B19013_E001|B19013_M001\n"
+            "0100000US|78538|176\n"
+            "0500000US13059|52267|1999\n"
+            "0500000US32009|-666666666|-222222222\n")
+    df = parse_table(text, "B19013_E001", "median_income")
+    assert df["GEOID"].tolist() == ["13059", "32009"]
+    assert df["median_income"].iloc[0] == 52267
+    assert np.isnan(df["median_income"].iloc[1])
+
+
+def test_within_group_corr_too_few_rows_is_nan():
+    assert np.isnan(within_group_corr([], [], []))

@@ -29,7 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from canopy import mapping, spatial  # noqa: E402
-from canopy.data import load_acs, load_counties  # noqa: E402
+from canopy.acs import load_acs  # noqa: E402
+from canopy.data import load_counties  # noqa: E402
 
 DOCS, RESULTS = ROOT / "docs", ROOT / "results"
 INK, MUTED, GRID = "#1f2328", "#59636e", "#d0d7de"

@@ -2,20 +2,35 @@ name: analysis
 
 # Re-runs the analysis from the committed county tables in data/zonal/
 # (no raster download), so changes to the analysis are cheap to rebuild.
+# Optionally pulls the zonal tables from an earlier "zonal statistics" run.
 on:
   workflow_dispatch:
+    inputs:
+      zonal_run_id:
+        description: "Run ID of a zonal statistics run to take data/zonal/*.csv from (optional)"
+        required: false
+        default: ""
   push:
     branches: [main]
-    paths: ["scripts/run_analysis.py", "src/canopy/spatial.py", "src/canopy/mapping.py", ".github/workflows/analysis.yml"]
+    paths: ["scripts/run_analysis.py", "src/canopy/spatial.py", "src/canopy/mapping.py", "src/canopy/acs.py", ".github/workflows/analysis.yml"]
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   analysis:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        if: inputs.zonal_run_id != ''
+        with:
+          pattern: zonal-*
+          merge-multiple: true
+          path: data/zonal
+          run-id: ${{ inputs.zonal_run_id }}
+          github-token: ${{ github.token }}
       - name: Check for zonal tables
         id: check
         run: |
@@ -33,7 +48,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/*.png results/
+          git add data/zonal/*.csv docs results
           git diff --cached --quiet || git commit -m "Update results and figures [skip ci]"
           git pull --rebase
           git push

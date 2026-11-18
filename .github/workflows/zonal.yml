@@ -57,12 +57,21 @@ jobs:
           pattern: zonal-*
           merge-multiple: true
           path: data/zonal
-      - run: python scripts/run_analysis.py
+      - name: Run analysis
+        id: analysis
+        continue-on-error: true
+        run: python scripts/run_analysis.py
       - name: Commit results
+        # The zonal tables are committed even if the analysis step failed, so
+        # the slow raster step never has to be repeated to fix the analysis.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/zonal/*.csv docs/*.png results/
+          git add data/zonal/*.csv
+          git add docs results 2>/dev/null || true
           git diff --cached --quiet || git commit -m "Update zonal statistics, results and figures [skip ci]"
           git pull --rebase
           git push
+      - name: Fail if the analysis failed
+        if: steps.analysis.outcome == 'failure'
+        run: exit 1
