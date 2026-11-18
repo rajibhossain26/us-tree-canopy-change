@@ -204,10 +204,12 @@ def main() -> None:
     states.boundary.plot(ax=ax, color="white", linewidth=0.6)
     ax.set_axis_off()
     legend = [Patch(facecolor=lisa_colors[k], label=lab) for k, lab in [
-        ("High-High", "Gain cluster (High-High)"), ("Low-Low", "Loss cluster (Low-Low)"),
-        ("High-Low", "Gain amid losses (High-Low)"), ("Low-High", "Loss amid gains (Low-High)"),
+        ("High-High", "High-High: above-average change, clustered"),
+        ("Low-Low", "Low-Low: below-average change, clustered"),
+        ("High-Low", "High-Low: above-average, low neighbours"),
+        ("Low-High", "Low-High: below-average, high neighbours"),
         ("Not significant", "Not significant")]]
-    ax.legend(handles=legend, loc="lower right", frameon=False, fontsize=9)
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0.0, 0.1), frameon=False, fontsize=9)
     ax.set_title(f"Clusters of canopy change, {y0}–{y1} (local Moran's I, p < 0.05)", loc="left", fontsize=14, color=INK)
     mapping.add_north_arrow(ax)
     mapping.add_scale_bar(ax, length_km=500)
@@ -267,6 +269,7 @@ def main() -> None:
     popw = gdf.dropna(subset=["population", f"tcc_{y1}"])
     popw_tcc = float((popw[f"tcc_{y1}"] * popw["population"]).sum() / popw["population"].sum())
     lisa_counts = gdf["lisa"].value_counts()
+    ll = valid[valid["lisa"] == "Low-Low"]
 
     def tbl(df, cols, names):
         return df[cols].rename(columns=dict(zip(cols, names))).to_markdown(index=False, floatfmt=".1f")
@@ -292,7 +295,9 @@ def main() -> None:
         f"as a share of land area only: **{(valid['weight'] * 900 / valid['ALAND']).median():.3f}**.",
         f"- Global Moran's I of county change (queen contiguity): **{I:.3f}** (expected {EI:.4f}, permutation p = {p_global:.3f}).",
         "- Local clusters (p < 0.05, no multiple-testing correction): "
-        + ", ".join(f"{k}: {int(lisa_counts.get(k, 0))}" for k in ["High-High", "Low-Low", "High-Low", "Low-High"]) + ".",
+        + ", ".join(f"{k}: {int(lisa_counts.get(k, 0))}" for k in ["High-High", "Low-Low", "High-Low", "Low-High"]) + ". "
+        f"Of the Low-Low counties, {int((ll['change_pp'] < 0).sum()):,} ({(ll['change_pp'] < 0).mean():.0%}) actually lost canopy; "
+        f"the rest gained less than average (mean change {valid['change_pp'].mean():+.2f} pp).",
         "",
         "## Data screening",
         "",
