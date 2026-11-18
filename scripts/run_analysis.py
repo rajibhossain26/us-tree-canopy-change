@@ -41,8 +41,31 @@ def load_zonal() -> pd.DataFrame:
     files = sorted((ROOT / "data" / "zonal").glob("tcc_*.csv"))
     if len(files) < 2:
         raise SystemExit("need at least two years in data/zonal/ - run zonal_stats.py first")
-    z = pd.concat([pd.read_csv(f, dtype={"GEOID": str}) for f in files])
+    z = pd.concat([pd.read_csv(f, dtype={"GEOID": str}) for f in files], ignore_index=True)
     return z
+
+
+def coverage_screen(z: pd.DataFrame, county_min: float = 0.99, year_max_share: float = 0.01):
+    """Drop incomplete data.
+
+    A county's valid-pixel count should be the same every year, so coverage
+    is each county-year's count relative to that county's maximum. A year in
+    which more than ``year_max_share`` of counties fall below ``county_min``
+    has scene gaps and is dropped whole; remaining county-years below
+    ``county_min`` are set to missing. Returns (screened table, notes).
+    """
+    z = z.copy()
+    z["coverage"] = z["weight_sum"] / z.groupby("GEOID")["weight_sum"].transform("max")
+    share_low = z.groupby("year")["coverage"].apply(lambda c: float((c < county_min).mean()))
+    dropped = [int(y) for y, f in share_low.items() if f > year_max_share]
+    notes = [f"{y}: {share_low[y]:.1%} of counties have under {county_min:.0%} of their usual valid pixels "
+             f"(gaps in that year's raster), so {y} is left out." for y in dropped]
+    z = z[~z["year"].isin(dropped)].copy()
+    low = z["coverage"] < county_min
+    if low.any():
+        notes.append(f"{int(low.sum())} further county-year values with under {county_min:.0%} coverage set to missing.")
+    z.loc[low, "tcc_mean"] = np.nan
+    return z, notes
 
 
 def weighted_mean(df, value, weight):
@@ -80,7 +103,7 @@ def main() -> None:
     RESULTS.mkdir(exist_ok=True)
 
     counties = load_counties(ROOT / "data" / "raw")
-    z = load_zonal()
+    z, coverage_notes = coverage_screen(load_zonal())
     years = sorted(z["year"].unique())
     y0, y1 = years[0], years[-1]
 
@@ -103,14 +126,16 @@ def main() -> None:
     gdf = gdf.to_crs(mapping.CRS)
 
     # ---- national and state summaries ---------------------------------
+    # Trends use a balanced panel: counties with a value in every year.
+    panel = gdf.dropna(subset=[f"tcc_{y}" for y in years])
     trend = pd.DataFrame({
         "year": years,
-        "conus_mean_tcc": [weighted_mean(gdf, f"tcc_{y}", "weight") for y in years],
+        "conus_mean_tcc": [weighted_mean(panel, f"tcc_{y}", "weight") for y in years],
     })
     trend.to_csv(RESULTS / "national_trend.csv", index=False, float_format="%.3f")
 
     st_rows = []
-    for (fp, abbr, name), d in gdf.groupby(["STATEFP", "STUSPS", "STATE_NAME"]):
+    for (fp, abbr, name), d in panel.groupby(["STATEFP", "STUSPS", "STATE_NAME"]):
         row = {"STATEFP": fp, "state": abbr, "name": name}
         for y in years:
             row[f"tcc_{y}"] = weighted_mean(d, f"tcc_{y}", "weight")
@@ -254,7 +279,8 @@ def main() -> None:
         "",
         "## Headline numbers",
         "",
-        f"- Counties analysed: **{valid.shape[0]:,}** (conterminous US).",
+        f"- Counties analysed: **{valid.shape[0]:,}** of {len(gdf):,} in the conterminous US "
+        f"({len(panel):,} with a value in every year, used for the national and state trends).",
         f"- CONUS area-weighted mean canopy cover: **{t0:.2f}%** in {y0} and **{t1:.2f}%** in {y1} "
         f"({t1 - t0:+.2f} percentage points).",
         f"- Counties with lower canopy in {y1} than {y0}: **{(valid['change_pp'] < 0).sum():,}** "
@@ -268,9 +294,13 @@ def main() -> None:
         "- Local clusters (p < 0.05, no multiple-testing correction): "
         + ", ".join(f"{k}: {int(lisa_counts.get(k, 0))}" for k in ["High-High", "Low-Low", "High-Low", "Low-High"]) + ".",
         "",
+        "## Data screening",
+        "",
+        *([f"- {n}" for n in coverage_notes] or ["- All years and counties passed the coverage check."]),
+        "",
         "## National trend",
         "",
-        trend.rename(columns={"year": "Year", "conus_mean_tcc": "Mean canopy (%)"}).to_markdown(index=False, floatfmt=".2f"),
+        trend.assign(year=trend["year"].astype(str)).rename(columns={"year": "Year", "conus_mean_tcc": "Mean canopy (%)"}).to_markdown(index=False, floatfmt=".2f"),
         "",
         "## States with the largest losses and gains",
         "",

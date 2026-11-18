@@ -5,6 +5,11 @@ name: zonal statistics
 # resolution, then runs the analysis and commits the tables and figures.
 on:
   workflow_dispatch:
+    inputs:
+      years:
+        description: "JSON list of years to (re)compute, e.g. [1986]"
+        required: false
+        default: "[1986, 1995, 2005, 2015, 2025]"
   push:
     branches: [main]
     paths: ["scripts/zonal_stats.py", "src/canopy/zonal.py", "src/canopy/data.py", ".github/workflows/zonal.yml"]
@@ -20,7 +25,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        year: [1985, 1995, 2005, 2015, 2025]
+        year: ${{ fromJSON(inputs.years || '[1986, 1995, 2005, 2015, 2025]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
