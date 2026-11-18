@@ -1,0 +1,68 @@
+name: zonal statistics
+
+# Downloads each year of NLCD Tree Canopy Cover (~3.6 GB per CONUS file) from
+# the USDA Forest Service, computes mean canopy per county at full 30 m
+# resolution, then runs the analysis and commits the tables and figures.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/zonal_stats.py", "src/canopy/zonal.py", "src/canopy/data.py", ".github/workflows/zonal.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  zonal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: [1985, 1995, 2005, 2015, 2025]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Prepare scratch disk
+        run: |
+          sudo mkdir -p /mnt/tcc && sudo chown "$USER" /mnt/tcc
+          df -h / /mnt
+      - name: Download NLCD TCC ${{ matrix.year }}
+        run: |
+          url="https://data.fs.usda.gov/geodata/rastergateway/treecanopycover/docs/v2025-6/nlcd_tcc_conus_${{ matrix.year }}_v2025-6_wgs84.zip"
+          curl -fL --retry 5 --retry-delay 30 -sS -w "downloaded %{size_download} bytes at %{speed_download} B/s\n" \
+               -o /mnt/tcc/tcc.zip "$url"
+      - name: County zonal statistics
+        run: python scripts/zonal_stats.py --year ${{ matrix.year }} --zip /mnt/tcc/tcc.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zonal-${{ matrix.year }}
+          path: data/zonal/tcc_${{ matrix.year }}.csv
+
+  analysis:
+    needs: zonal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zonal-*
+          merge-multiple: true
+          path: data/zonal
+      - run: python scripts/run_analysis.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/zonal/*.csv docs/*.png results/
+          git diff --cached --quiet || git commit -m "Update zonal statistics, results and figures [skip ci]"
+          git pull --rebase
+          git push

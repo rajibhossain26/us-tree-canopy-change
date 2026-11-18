@@ -1,0 +1,39 @@
+name: analysis
+
+# Re-runs the analysis from the committed county tables in data/zonal/
+# (no raster download), so changes to the analysis are cheap to rebuild.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/run_analysis.py", "src/canopy/spatial.py", "src/canopy/mapping.py", ".github/workflows/analysis.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for zonal tables
+        id: check
+        run: |
+          n=$(ls data/zonal/tcc_*.csv 2>/dev/null | wc -l)
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          [ "$n" -ge 2 ] || echo "Fewer than two years in data/zonal/ yet - the zonal workflow will build them."
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.n >= 2
+        with:
+          python-version: "3.12"
+      - if: steps.check.outputs.n >= 2
+        run: pip install -r requirements.txt && python scripts/run_analysis.py
+      - name: Commit results
+        if: steps.check.outputs.n >= 2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/*.png results/
+          git diff --cached --quiet || git commit -m "Update results and figures [skip ci]"
+          git pull --rebase
+          git push
