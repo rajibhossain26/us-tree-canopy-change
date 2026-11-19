@@ -200,12 +200,15 @@
       ? `Tree canopy cover, ${years[yi]} (%)`
       : (yi === 0 ? "Change: pick a later year" : `Change ${years[0]}–${years[yi]} (percentage points)`);
     el.innerHTML = `<div class="title">${lab}</div>
-      <svg width="${w + 20}" height="34"><defs><linearGradient id="lg">${stops}</linearGradient></defs>
-      <rect x="10" y="0" width="${w}" height="${h}" fill="url(#lg)" rx="2"/>
-      ${ticks.map(t => { const x = 10 + (t - dom[0]) / (dom[1] - dom[0]) * w;
-        const txt = mode === "level" ? (t === 80 ? "80+" : t) : (t === -10 ? "≤−10" : t === 10 ? "≥+10" : (t > 0 ? "+" + t : t));
+      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+      <svg width="${w + 44}" height="34"><defs><linearGradient id="lg">${stops}</linearGradient></defs>
+      <rect x="22" y="0" width="${w}" height="${h}" fill="url(#lg)" rx="2"/>
+      ${ticks.map(t => { const x = 22 + (t - dom[0]) / (dom[1] - dom[0]) * w;
+        const txt = mode === "level" ? (t === 80 ? "80+" : t) : (t === -10 ? "≤−10" : t === 10 ? "≥+10" : (t > 0 ? "+" + t : t < 0 ? "−" + (-t) : t));
         return `<line x1="${x}" x2="${x}" y1="${h}" y2="${h + 4}" stroke="currentColor"/><text x="${x}" y="${h + 16}" text-anchor="middle" font-size="11" fill="currentColor">${txt}</text>`; }).join("")}
       </svg>
+      <div style="display:flex;align-items:center;gap:6px;padding-top:0"><span style="width:14px;height:10px;border-radius:2px;background:${nodata};display:inline-block"></span>No data</div>
+      </div>
       ${mode === "change" ? '<div style="font-size:11px">brown = loss · teal = gain</div>' : ""}`;
   }
 
