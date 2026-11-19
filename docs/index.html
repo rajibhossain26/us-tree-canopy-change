@@ -45,6 +45,12 @@
   .search { position: relative; }
   .search input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px;
                   padding: 7px 14px; font: inherit; font-size: 14px; width: 230px; }
+  .sugg { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; min-width: 260px; margin: 0; padding: 4px;
+          list-style: none; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          box-shadow: 0 6px 24px rgba(0,0,0,.14); }
+  .sugg li { padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .sugg li[aria-selected="true"], .sugg li[data-i]:hover { background: var(--accent-soft); }
+  .sugg li.none { color: var(--muted); cursor: default; }
   .mapbox { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
   svg.map { display: block; width: 100%; height: auto; touch-action: none; }
   .county { stroke: var(--border); stroke-width: 0.25; vector-effect: non-scaling-stroke; cursor: pointer; }
@@ -89,8 +95,8 @@
       <output id="yearOut">2025</output>
     </div>
     <div class="search">
-      <input id="find" list="countyList" placeholder="Find a county…" aria-label="Find a county">
-      <datalist id="countyList"></datalist>
+      <input id="find" placeholder="Find a county…" aria-label="Find a county" autocomplete="off" role="combobox" aria-controls="sugg">
+      <ul id="sugg" class="sugg" role="listbox" hidden></ul>
     </div>
   </div>
 
@@ -312,21 +318,76 @@
   scalebar(1);
   window.addEventListener("resize", () => scalebar(d3.zoomTransform(svg.node()).k));
 
-  // search
-  const byLabel = new Map(counties.features.map(f => [`${f.properties.n}, ${f.properties.s}`, f]));
-  document.getElementById("countyList").innerHTML =
-    [...byLabel.keys()].sort().map(k => `<option value="${k}">`).join("");
-  document.getElementById("find").addEventListener("change", e => {
-    const f = byLabel.get(e.target.value.trim());
-    if (!f) return;
+  // search: forgiving matching with our own suggestion list
+  const STATES = {AL:"alabama",AZ:"arizona",AR:"arkansas",CA:"california",CO:"colorado",CT:"connecticut",DE:"delaware",
+    DC:"district of columbia",FL:"florida",GA:"georgia",ID:"idaho",IL:"illinois",IN:"indiana",IA:"iowa",KS:"kansas",
+    KY:"kentucky",LA:"louisiana",ME:"maine",MD:"maryland",MA:"massachusetts",MI:"michigan",MN:"minnesota",MS:"mississippi",
+    MO:"missouri",MT:"montana",NE:"nebraska",NV:"nevada",NH:"new hampshire",NJ:"new jersey",NM:"new mexico",NY:"new york",
+    NC:"north carolina",ND:"north dakota",OH:"ohio",OK:"oklahoma",OR:"oregon",PA:"pennsylvania",RI:"rhode island",
+    SC:"south carolina",SD:"south dakota",TN:"tennessee",TX:"texas",UT:"utah",VT:"vermont",VA:"virginia",WA:"washington",
+    WV:"west virginia",WI:"wisconsin",WY:"wyoming"};
+  const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[.']/g, "").replace(/\b(county|parish|borough|planning region)\b/g, " ").replace(/\s+/g, " ").trim();
+  const index = counties.features.map(f => ({f, name: norm(f.properties.n), st: f.properties.s,
+    label: `${f.properties.n}, ${f.properties.s}`})).sort((a, b) => a.label.localeCompare(b.label));
+  function parse(q) {
+    let s = norm(q.replace(/,/g, " ")), st = null;
+    // longest names first, so "west virginia" is not read as "virginia"
+    for (const [ab, full] of Object.entries(STATES).sort((x, y) => y[1].length - x[1].length)) {
+      for (const key of [full, ab.toLowerCase()]) {
+        if (s === key) continue;
+        if (s.endsWith(" " + key)) { st = ab; s = s.slice(0, -key.length).trim(); break; }
+      }
+      if (st) break;
+    }
+    return {name: s, st};
+  }
+  function matches(q) {
+    const {name, st} = parse(q);
+    if (!name) return [];
+    const pool = index.filter(d => (!st || d.st === st));
+    const exact = pool.filter(d => d.name === name);
+    const starts = pool.filter(d => d.name !== name && d.name.startsWith(name));
+    const inside = pool.filter(d => !d.name.startsWith(name) && d.name.includes(name));
+    return [...exact, ...starts, ...inside].slice(0, 8);
+  }
+  const input = document.getElementById("find"), sugg = document.getElementById("sugg");
+  let options = [], active = 0;
+  function renderSugg() {
+    if (!input.value.trim()) { sugg.hidden = true; return; }
+    sugg.hidden = false;
+    sugg.innerHTML = options.length
+      ? options.map((d, i) => `<li role="option" data-i="${i}" aria-selected="${i === active}">${d.label}</li>`).join("")
+      : `<li class="none">No county found. Try a name like “Fulton” or “Fulton, GA”.</li>`;
+  }
+  function choose(d) {
+    const f = d.f;
+    input.value = d.label; sugg.hidden = true;
     const [[x0, y0], [x1, y1]] = path.bounds(f);
     const k = Math.min(10, 0.35 / Math.max((x1 - x0) / W, (y1 - y0) / H));
     const t = d3.zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
     svg.transition().duration(800).call(zoom.transform, t);
-    pinned = f; paths.classed("pinned", d => d === f);
+    pinned = f; paths.classed("pinned", p => p === f);
     const r = box.getBoundingClientRect();
     showTip(f, {clientX: r.left + r.width / 2, clientY: r.top + r.height / 2});
+  }
+  input.addEventListener("input", () => { options = matches(input.value); active = 0; renderSugg(); });
+  input.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!options.length) return;
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length; renderSugg();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (!options.length) options = matches(input.value);
+      if (options.length) choose(options[active] || options[0]); else renderSugg();
+    } else if (e.key === "Escape") { sugg.hidden = true; }
   });
+  sugg.addEventListener("pointerdown", e => {
+    const li = e.target.closest("li[data-i]"); if (!li) return;
+    e.preventDefault(); choose(options[+li.dataset.i]);
+  });
+  input.addEventListener("blur", () => setTimeout(() => { sugg.hidden = true; }, 150));
 
   redraw();
 })();
