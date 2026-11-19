@@ -140,6 +140,16 @@
   }
   document.getElementById("loading").remove();
 
+  // Safety net: if any polygon's rings run the wrong way for d3-geo it would cover
+  // the whole globe; reverse any polygon whose area exceeds a hemisphere.
+  function rewind(fc) {
+    for (const f of fc.features) {
+      const geom = f.geometry, polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
+      for (const p of polys) if (d3.geoArea({type: "Polygon", coordinates: p}) > 2 * Math.PI) p.forEach(r => r.reverse());
+    }
+  }
+  rewind(counties); rewind(states);
+
   const meta = counties.meta, years = meta.years, last = years.length - 1;
   const pct = d3.format(".1f"), signed = d3.format("+.1f");
   const projection = d3.geoConicEqualArea().parallels([29.5, 45.5]).rotate([96, 0]).center([0, 38])

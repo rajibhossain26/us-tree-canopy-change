@@ -47,10 +47,10 @@ def main() -> None:
     counties = load_counties(ROOT / "data" / "raw").to_crs("EPSG:4326")
     table = pd.read_csv(ROOT / "results" / "county_canopy.csv", dtype={"GEOID": str})
     years = sorted(int(c.split("_")[1]) for c in table.columns if c.startswith("tcc_"))
-    trend = pd.read_csv(ROOT / "results" / "national_trend.csv")
-    trend = trend[trend["year"].isin(years)]
-
     simple = shapely.coverage_simplify(counties.geometry.to_numpy(), tolerance=TOLERANCE)
+    # d3-geo expects exterior rings clockwise (the reverse of RFC 7946); otherwise a
+    # polygon is read as "the whole globe except this county".
+    simple = shapely.orient_polygons(simple, exterior_cw=True)
     counties = counties.assign(geometry=simple)
     merged = counties.merge(table, on="GEOID", how="left", suffixes=("", "_t"))
 
@@ -59,21 +59,18 @@ def main() -> None:
         vals = [None if pd.isna(r[f"tcc_{y}"]) else round(float(r[f"tcc_{y}"]), 1) for y in years]
         feats.append(feature(r.geometry, {"id": r["GEOID"], "n": r["NAME"], "s": r["STUSPS"], "v": vals}))
 
-    change = table["change_pp"].dropna()
-    meta = {
-        "years": years,
-        "national": [round(float(x), 2) for x in trend["conus_mean_tcc"]],
-        "counties": int(change.size),
-        "gained": int((change > 0).sum()),
-        "lost": int((change < 0).sum()),
-        "source": "USDA Forest Service / NLCD Tree Canopy Cover v2025.6",
-    }
+    # Headline numbers come from run_analysis.py at full precision, so the map and
+    # results/RESULTS.md always agree.
+    meta = json.loads((ROOT / "results" / "summary.json").read_text())
+    assert meta["years"] == years, (meta["years"], years)
+    meta["source"] = "USDA Forest Service / NLCD Tree Canopy Cover v2025.6"
     fc = {"type": "FeatureCollection", "meta": meta, "features": feats}
     path = OUT / "counties.geojson"
     path.write_text(json.dumps(fc, separators=(",", ":")))
 
     states = counties.dissolve(by="STUSPS")[["geometry"]].reset_index()
-    sfeats = [feature(g, {"s": s}) for s, g in zip(states["STUSPS"], states.geometry)]
+    states_geom = shapely.orient_polygons(states.geometry.to_numpy(), exterior_cw=True)
+    sfeats = [feature(g, {"s": s}) for s, g in zip(states["STUSPS"], states_geom)]
     (OUT / "states.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": sfeats},
                                                     separators=(",", ":")))
 

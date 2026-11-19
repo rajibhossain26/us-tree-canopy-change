@@ -12,6 +12,7 @@ joins Census boundaries and ACS population / income, and writes:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -344,6 +345,15 @@ def main() -> None:
         "",
     ]
     (RESULTS / "RESULTS.md").write_text("\n".join(lines))
+    # Headline numbers at full precision, shared with the interactive map (scripts/export_web.py).
+    summary = {
+        "years": [int(y) for y in years],
+        "national": [round(float(x), 2) for x in trend["conus_mean_tcc"]],
+        "counties": int(valid.shape[0]),
+        "gained": int((valid["change_pp"] > 0).sum()),
+        "lost": int((valid["change_pp"] < 0).sum()),
+    }
+    (RESULTS / "summary.json").write_text(json.dumps(summary, indent=2))
     print("\n".join(lines))
 
 
