@@ -12,7 +12,7 @@ on:
         default: ""
   push:
     branches: [main]
-    paths: ["scripts/run_analysis.py", "src/canopy/spatial.py", "src/canopy/mapping.py", "src/canopy/acs.py", ".github/workflows/analysis.yml"]
+    paths: ["scripts/run_analysis.py", "src/canopy/spatial.py", "src/canopy/mapping.py", "src/canopy/acs.py", "scripts/export_web.py", ".github/workflows/analysis.yml"]
 
 permissions:
   contents: write
@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: "3.12"
       - if: steps.check.outputs.n >= 2
-        run: pip install -r requirements.txt && python scripts/run_analysis.py
+        run: pip install -r requirements.txt && python scripts/run_analysis.py && python scripts/export_web.py
       - name: Commit results
         if: steps.check.outputs.n >= 2
         run: |

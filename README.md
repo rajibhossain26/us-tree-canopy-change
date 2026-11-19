@@ -13,6 +13,8 @@ Everything is rebuilt by GitHub Actions from public data: the pipeline downloads
 each year's raster (~3.6 GB), computes county means at full resolution, and
 commits the tables and maps you see here.
 
+**[Explore the interactive map →](https://rajibhossain26.github.io/us-tree-canopy-change/)** Every county, 1986–2025, with a time slider, county search and hover details.
+
 ## Key findings (1986–2025)
 
 - **The US got slightly leafier overall, but not everywhere.** Mean canopy
@@ -96,6 +98,7 @@ src/canopy/data.py       downloads: TCC rasters and Census county boundaries
 src/canopy/acs.py        ACS population and income from Census summary files
 scripts/zonal_stats.py   one year of TCC -> data/zonal/tcc_<year>.csv
 scripts/run_analysis.py  tables, maps and results/RESULTS.md
+scripts/export_web.py    simplified county map data for the interactive page (docs/index.html)
 .github/workflows/       tests, the full raster pipeline, and a quick re-run of the analysis
 ```
 

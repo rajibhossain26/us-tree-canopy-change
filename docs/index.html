@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four decades of US tree canopy · Rajib Hossain</title>
+<meta name="description" content="Explore tree canopy cover and its change for every county in the conterminous United States, 1986 to 2025, from USDA Forest Service 30 m satellite data.">
+<meta property="og:title" content="Four decades of US tree canopy, county by county">
+<meta property="og:description" content="An interactive map of tree canopy in every US county, 1986 to 2025, from 30 m USDA Forest Service data.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rajibhossain26.github.io/us-tree-canopy-change/">
+<meta property="og:image" content="https://rajibhossain26.github.io/us-tree-canopy-change/canopy_change_map.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    --ink: #17212b; --muted: #5b6b7a; --line: #e3e8ee; --bg: #fbfcfd; --card: #ffffff;
+    --accent: #1f7a5a; --accent-soft: #e6f2ed; --nodata: #d9dee3; --border: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8edf2; --muted: #9aa8b5; --line: #26313b; --bg: #0f151b; --card: #151d25;
+      --accent: #4cc79a; --accent-soft: #15302a; --nodata: #2b3540; --border: #0f151b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 40px; }
+  .kicker { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 6px; }
+  h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.15; margin: 0 0 10px; }
+  .lede { color: var(--muted); max-width: 760px; margin: 0 0 18px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 20px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 170px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 7px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .years { display: flex; align-items: center; gap: 10px; }
+  .years input { width: 220px; accent-color: var(--accent); }
+  .years output { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; }
+  .play { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px;
+          width: 34px; height: 34px; cursor: pointer; font-size: 13px; }
+  .search { position: relative; }
+  .search input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px;
+                  padding: 7px 14px; font: inherit; font-size: 14px; width: 230px; }
+  .mapbox { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  svg.map { display: block; width: 100%; height: auto; touch-action: none; }
+  .county { stroke: var(--border); stroke-width: 0.25; vector-effect: non-scaling-stroke; cursor: pointer; }
+  .county:hover, .county.pinned { stroke: var(--ink); stroke-width: 1.5; }
+  .state { fill: none; stroke: var(--border); stroke-width: 1.1; vector-effect: non-scaling-stroke; pointer-events: none; }
+  .legend { position: absolute; left: 16px; bottom: 14px; background: color-mix(in srgb, var(--card) 88%, transparent);
+            border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-bottom: 4px; }
+  .furniture { position: absolute; right: 16px; bottom: 14px; display: flex; align-items: flex-end; gap: 14px;
+               font-size: 11px; color: var(--muted); pointer-events: none; }
+  .north { text-align: center; font-weight: 700; color: var(--ink); }
+  .zoomhint { position: absolute; right: 14px; top: 12px; font-size: 12px; color: var(--muted); }
+  .reset { position: absolute; left: 14px; top: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+           border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; display: none; }
+  .tip { position: absolute; pointer-events: none; background: var(--card); color: var(--ink); border: 1px solid var(--line);
+         border-radius: 10px; padding: 10px 12px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.14); min-width: 210px; display: none; z-index: 5; }
+  .tip h3 { margin: 0 0 2px; font-size: 15px; }
+  .tip .big { font-size: 22px; font-weight: 700; }
+  .tip .sub { color: var(--muted); }
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .notes { color: var(--muted); font-size: 14px; margin-top: 16px; max-width: 900px; }
+  .notes a, footer a { color: var(--accent); }
+  footer { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Interactive map</p>
+  <h1>Four decades of US tree canopy, county by county</h1>
+  <p class="lede">How much of each county is covered by tree canopy, and how has that changed since 1986? Each county's value is the average of millions of 30-metre pixels from USDA Forest Service satellite estimates. Hover or tap a county, search for one, or press play.</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="What to show">
+      <button id="m-level" aria-pressed="true">Canopy cover</button>
+      <button id="m-change" aria-pressed="false">Change since 1986</button>
+    </div>
+    <div class="years">
+      <button class="play" id="play" aria-label="Play through the years">▶</button>
+      <input type="range" id="year" min="0" max="4" step="1" value="4" aria-label="Year">
+      <output id="yearOut">2025</output>
+    </div>
+    <div class="search">
+      <input id="find" list="countyList" placeholder="Find a county…" aria-label="Find a county">
+      <datalist id="countyList"></datalist>
+    </div>
+  </div>
+
+  <div class="mapbox" id="mapbox">
+    <svg class="map" id="map" viewBox="0 0 975 610" role="img" aria-label="Map of tree canopy by county"></svg>
+    <button class="reset" id="reset">Reset zoom</button>
+    <div class="zoomhint">Scroll or pinch to zoom</div>
+    <div class="legend" id="legend"></div>
+    <div class="furniture">
+      <svg id="scalebar" width="130" height="30" aria-label="Scale bar"></svg>
+      <div class="north" aria-label="North arrow">
+        <svg width="18" height="26" viewBox="0 0 18 26"><path d="M9 0 L17 22 L9 17 L1 22 Z" fill="currentColor"/></svg>
+        <div>N</div>
+      </div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="loading" id="loading">Loading 3,100 counties…</div>
+  </div>
+
+  <p class="notes">
+    Values are the area-weighted mean of the NLCD Tree Canopy Cover product (v2025.6), so they include water and treeless land in each county.
+    1986 is the baseline because the 1985 layer has scene gaps. Small changes, under about 1 percentage point, are within the model's noise.
+    Map projection: Albers equal-area; the north arrow is true at the centre of the map, and the scale bar is approximate away from it.
+    Methods, code and full results: <a href="https://github.com/rajibhossain26/us-tree-canopy-change">github.com/rajibhossain26/us-tree-canopy-change</a>.
+  </p>
+
+  <footer>
+    By <a href="https://rajibhossain26.github.io">Rajib Hossain</a>, Department of Geography, University of Georgia ·
+    Data: USDA Forest Service / NLCD Tree Canopy Cover v2025.6; US Census Bureau county boundaries (2023).
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+(async function () {
+  const W = 975, H = 610;
+  const svg = d3.select("#map");
+  const g = svg.append("g");
+  const tip = document.getElementById("tip");
+  const box = document.getElementById("mapbox");
+  let counties, states;
+  try {
+    [counties, states] = await Promise.all([d3.json("data/counties.geojson"), d3.json("data/states.geojson")]);
+  } catch (e) {
+    document.getElementById("loading").textContent = "The map data could not be loaded.";
+    return;
+  }
+  document.getElementById("loading").remove();
+
+  const meta = counties.meta, years = meta.years, last = years.length - 1;
+  const pct = d3.format(".1f"), signed = d3.format("+.1f");
+  const projection = d3.geoConicEqualArea().parallels([29.5, 45.5]).rotate([96, 0]).center([0, 38])
+    .fitExtent([[10, 10], [W - 10, H - 40]], states);
+  const path = d3.geoPath(projection);
+
+  // stats
+  const n0 = meta.national[0], n1 = meta.national[last];
+  document.getElementById("stats").innerHTML = [
+    [`${pct(n0)}% → ${pct(n1)}%`, `average canopy, ${years[0]} → ${years[last]}`],
+    [d3.format(",")(meta.gained), `of ${d3.format(",")(meta.counties)} counties gained canopy`],
+    [d3.format(",")(meta.lost), "counties lost canopy"],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+
+  // colour
+  const level = d3.scaleSequential(d3.interpolateGreens).domain([0, 80]).clamp(true);
+  const change = d3.scaleDiverging(d3.interpolateBrBG).domain([-10, 0, 10]).clamp(true);
+  const nodata = getComputedStyle(document.documentElement).getPropertyValue("--nodata").trim();
+  let mode = "level", yi = last;
+
+  const value = f => {
+    const v = f.properties.v;
+    if (mode === "level") return v[yi];
+    if (yi === 0 || v[0] == null || v[yi] == null) return null;
+    return v[yi] - v[0];
+  };
+  const fill = f => { const x = value(f); return x == null ? nodata : (mode === "level" ? level(x) : change(x)); };
+
+  const paths = g.selectAll("path.county").data(counties.features).join("path")
+    .attr("class", "county").attr("d", path).attr("fill", fill);
+  g.append("path").datum({type: "FeatureCollection", features: states.features})
+    .attr("class", "state").attr("d", path);
+
+  // legend
+  function legend() {
+    const el = document.getElementById("legend");
+    const w = 220, h = 10;
+    const scale = mode === "level" ? level : change;
+    const dom = mode === "level" ? [0, 80] : [-10, 10];
+    const stops = d3.range(0, 1.0001, 0.1).map(t => {
+      const x = dom[0] + t * (dom[1] - dom[0]);
+      return `<stop offset="${t * 100}%" stop-color="${scale(x)}"/>`;
+    }).join("");
+    const ticks = mode === "level" ? [0, 20, 40, 60, 80] : [-10, -5, 0, 5, 10];
+    const lab = mode === "level"
+      ? `Tree canopy cover, ${years[yi]} (%)`
+      : (yi === 0 ? "Change: pick a later year" : `Change ${years[0]}–${years[yi]} (percentage points)`);
+    el.innerHTML = `<div class="title">${lab}</div>
+      <svg width="${w + 20}" height="34"><defs><linearGradient id="lg">${stops}</linearGradient></defs>
+      <rect x="10" y="0" width="${w}" height="${h}" fill="url(#lg)" rx="2"/>
+      ${ticks.map(t => { const x = 10 + (t - dom[0]) / (dom[1] - dom[0]) * w;
+        const txt = mode === "level" ? (t === 80 ? "80+" : t) : (t === -10 ? "≤−10" : t === 10 ? "≥+10" : (t > 0 ? "+" + t : t));
+        return `<line x1="${x}" x2="${x}" y1="${h}" y2="${h + 4}" stroke="currentColor"/><text x="${x}" y="${h + 16}" text-anchor="middle" font-size="11" fill="currentColor">${txt}</text>`; }).join("")}
+      </svg>
+      ${mode === "change" ? '<div style="font-size:11px">brown = loss · teal = gain</div>' : ""}`;
+  }
+
+  function redraw() {
+    paths.attr("fill", fill);
+    document.getElementById("yearOut").textContent = years[yi];
+    legend();
+    if (pinned) showTip(pinned);
+  }
+
+  // controls
+  const mLevel = document.getElementById("m-level"), mChange = document.getElementById("m-change");
+  function setMode(m) {
+    mode = m; mLevel.setAttribute("aria-pressed", m === "level"); mChange.setAttribute("aria-pressed", m === "change");
+    redraw();
+  }
+  mLevel.onclick = () => setMode("level");
+  mChange.onclick = () => setMode("change");
+  const slider = document.getElementById("year");
+  slider.max = last;
+  slider.oninput = () => { yi = +slider.value; redraw(); };
+  let timer = null;
+  const play = document.getElementById("play");
+  play.onclick = () => {
+    if (timer) { clearInterval(timer); timer = null; play.textContent = "▶"; return; }
+    play.textContent = "❚❚";
+    yi = 0; slider.value = 0; redraw();
+    timer = setInterval(() => {
+      if (yi >= last) { clearInterval(timer); timer = null; play.textContent = "▶"; return; }
+      yi += 1; slider.value = yi; redraw();
+    }, 1100);
+  };
+
+  // tooltip
+  let pinned = null;
+  function sparkline(v) {
+    const w = 190, h = 42, pts = v.map((y, i) => [i, y]).filter(d => d[1] != null);
+    if (pts.length < 2) return "";
+    const x = d3.scaleLinear().domain([0, last]).range([4, w - 4]);
+    const ext = d3.extent(pts, d => d[1]); const pad = Math.max(1, (ext[1] - ext[0]) * 0.25);
+    const y = d3.scaleLinear().domain([ext[0] - pad, ext[1] + pad]).range([h - 12, 4]);
+    const line = d3.line().x(d => x(d[0])).y(d => y(d[1]))(pts);
+    return `<svg width="${w}" height="${h}" style="display:block;margin-top:6px">
+      <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      ${pts.map(d => `<circle cx="${x(d[0])}" cy="${y(d[1])}" r="${d[0] === yi ? 4 : 2.5}" fill="var(--accent)"/>`).join("")}
+      <text x="4" y="${h}" font-size="10" fill="var(--muted)">${years[0]}</text>
+      <text x="${w - 4}" y="${h}" font-size="10" fill="var(--muted)" text-anchor="end">${years[last]}</text></svg>`;
+  }
+  function showTip(f, evt) {
+    const p = f.properties, v = p.v;
+    const cur = v[yi], ch = (v[0] != null && v[last] != null) ? v[last] - v[0] : null;
+    tip.innerHTML = `<h3>${p.n}, ${p.s}</h3>
+      ${cur == null ? '<div class="sub">No data for this year</div>'
+        : `<div><span class="big">${pct(cur)}%</span> <span class="sub">canopy in ${years[yi]}</span></div>`}
+      ${ch == null ? "" : `<div class="sub">${signed(ch)} points since ${years[0]}</div>`}
+      ${sparkline(v)}`;
+    tip.style.display = "block";
+    if (evt) placeTip(evt);
+  }
+  function placeTip(evt) {
+    const r = box.getBoundingClientRect();
+    let x = evt.clientX - r.left + 14, y = evt.clientY - r.top + 14;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    if (x + tw > r.width - 6) x = evt.clientX - r.left - tw - 14;
+    if (y + th > r.height - 6) y = evt.clientY - r.top - th - 14;
+    tip.style.left = Math.max(6, x) + "px"; tip.style.top = Math.max(6, y) + "px";
+  }
+  paths.on("pointermove", (evt, f) => { if (!pinned) showTip(f, evt); else placeTip(evt); })
+       .on("pointerleave", () => { if (!pinned) tip.style.display = "none"; })
+       .on("click", (evt, f) => {
+         if (pinned === f) { pinned = null; paths.classed("pinned", false); return; }
+         pinned = f; paths.classed("pinned", d => d === f); showTip(f, evt);
+       });
+
+  // zoom, scale bar
+  const resetBtn = document.getElementById("reset");
+  const zoom = d3.zoom().scaleExtent([1, 14]).translateExtent([[0, 0], [W, H]])
+    .on("zoom", ({transform}) => {
+      g.attr("transform", transform);
+      resetBtn.style.display = transform.k > 1.01 ? "block" : "none";
+      scalebar(transform.k);
+    });
+  svg.call(zoom).on("dblclick.zoom", null);
+  resetBtn.onclick = () => svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity);
+
+  function scalebar(k) {
+    // km per screen pixel at the map centre (Albers is equal-area, not equidistant, so approximate elsewhere)
+    const c = [W / 2, H / 2], a = projection.invert(c), b = projection.invert([c[0] + 100, c[1]]);
+    const kmPerUnit = d3.geoDistance(a, b) * 6371.0088 / 100;
+    const unitsPerPx = W / document.getElementById("map").getBoundingClientRect().width;
+    const kmPerPx = kmPerUnit * unitsPerPx / k;
+    const target = 110 * kmPerPx;
+    const nice = [10, 20, 25, 50, 100, 200, 250, 500, 1000].reduce((p, q) => (q <= target ? q : p), 10);
+    const px = nice / kmPerPx;
+    d3.select("#scalebar").html(`
+      <rect x="2" y="16" width="${px / 2}" height="6" fill="currentColor"/>
+      <rect x="${2 + px / 2}" y="16" width="${px / 2}" height="6" fill="none" stroke="currentColor"/>
+      <text x="2" y="12" font-size="11" fill="currentColor">0</text>
+      <text x="${2 + px}" y="12" font-size="11" fill="currentColor" text-anchor="end">${nice} km</text>`);
+  }
+  scalebar(1);
+  window.addEventListener("resize", () => scalebar(d3.zoomTransform(svg.node()).k));
+
+  // search
+  const byLabel = new Map(counties.features.map(f => [`${f.properties.n}, ${f.properties.s}`, f]));
+  document.getElementById("countyList").innerHTML =
+    [...byLabel.keys()].sort().map(k => `<option value="${k}">`).join("");
+  document.getElementById("find").addEventListener("change", e => {
+    const f = byLabel.get(e.target.value.trim());
+    if (!f) return;
+    const [[x0, y0], [x1, y1]] = path.bounds(f);
+    const k = Math.min(10, 0.35 / Math.max((x1 - x0) / W, (y1 - y0) / H));
+    const t = d3.zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    svg.transition().duration(800).call(zoom.transform, t);
+    pinned = f; paths.classed("pinned", d => d === f);
+    const r = box.getBoundingClientRect();
+    showTip(f, {clientX: r.left + r.width / 2, clientY: r.top + r.height / 2});
+  });
+
+  redraw();
+})();
+</script>
+</body>
+</html>

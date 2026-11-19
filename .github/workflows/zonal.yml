@@ -65,7 +65,7 @@ jobs:
       - name: Run analysis
         id: analysis
         continue-on-error: true
-        run: python scripts/run_analysis.py
+        run: python scripts/run_analysis.py && python scripts/export_web.py
       - name: Commit results
         # The zonal tables are committed even if the analysis step failed, so
         # the slow raster step never has to be repeated to fix the analysis.
